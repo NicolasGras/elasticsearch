@@ -240,6 +240,40 @@ public enum XContentType implements MediaType {
         public XContentType canonical() {
             return CBOR;
         }
+    },
+    /**
+     * A JSON based content type, with values as JSON objects.
+     */
+    JSON_OBJECTS(8) {
+        @Override
+        public String mediaTypeWithoutParameters() {
+            return VENDOR_APPLICATION_PREFIX+"json-objects";
+        }
+
+        @Override
+        public String mediaType() {
+            return VENDOR_APPLICATION_PREFIX+"json-objects;charset=utf-8";
+        }
+
+        @Override
+        public String queryParameter() {
+            return "json-objects";
+        }
+
+        @Override
+        public XContent xContent() {
+            return JsonXContent.jsonXContent;
+        }
+
+        @Override
+        public Set<HeaderValue> headerValues() {
+            return Set.of(new HeaderValue(VENDOR_APPLICATION_PREFIX+"json"), new HeaderValue(VENDOR_APPLICATION_PREFIX+"x-ndjson"), new HeaderValue(VENDOR_APPLICATION_PREFIX+"*"));
+        }
+
+        @Override
+        public XContentType canonical() {
+            return JSON;
+        }
     };
 
     public static final MediaTypeRegistry<XContentType> MEDIA_TYPE_REGISTRY = new MediaTypeRegistry<XContentType>().register(

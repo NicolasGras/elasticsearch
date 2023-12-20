@@ -44,6 +44,10 @@ public class ParsedMediaTypeTests extends ESTestCase {
             ParsedMediaType.parseMediaType("application/vnd.elasticsearch+cbor;compatible-with=7").toMediaType(mediaTypeRegistry),
             equalTo(XContentType.VND_CBOR)
         );
+        assertThat(
+            ParsedMediaType.parseMediaType("application/vnd.elasticsearch+json-objects;compatible-with=7").toMediaType(mediaTypeRegistry),
+            equalTo(XContentType.JSON_OBJECTS)
+        );
     }
 
     public void testJsonWithParameters() throws Exception {
