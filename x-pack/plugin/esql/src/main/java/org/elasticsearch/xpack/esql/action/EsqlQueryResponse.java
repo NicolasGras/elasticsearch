@@ -25,74 +25,18 @@ import org.elasticsearch.core.AbstractRefCounted;
 import org.elasticsearch.core.Nullable;
 import org.elasticsearch.core.Releasable;
 import org.elasticsearch.core.Releasables;
-<<<<<<< Updated upstream
-=======
-import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.search.DocValueFormat;
->>>>>>> Stashed changes
-import org.elasticsearch.xcontent.InstantiatingObjectParser;
-import org.elasticsearch.xcontent.ObjectParser;
-import org.elasticsearch.xcontent.ParseField;
-import org.elasticsearch.xcontent.ParserConstructor;
 import org.elasticsearch.xcontent.ToXContent;
-import org.elasticsearch.xcontent.XContentParser;
-<<<<<<< Updated upstream
-=======
-import org.elasticsearch.xcontent.XContentParserConfiguration;
-import org.elasticsearch.xcontent.XContentType;
-import org.elasticsearch.xcontent.json.JsonXContent;
-import org.elasticsearch.xpack.esql.EsqlIllegalArgumentException;
-import org.elasticsearch.xpack.esql.planner.PlannerUtils;
-import org.elasticsearch.xpack.esql.type.EsqlDataTypes;
-import org.elasticsearch.xpack.versionfield.Version;
->>>>>>> Stashed changes
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.elasticsearch.xcontent.ConstructingObjectParser.constructorArg;
-<<<<<<< Updated upstream
-import static org.elasticsearch.xcontent.ConstructingObjectParser.optionalConstructorArg;
-import static org.elasticsearch.xpack.esql.action.ResponseValueUtils.valuesToPage;
-=======
-import static org.elasticsearch.xpack.esql.formatter.TextFormat.URL_PARAM_FORMAT;
-import static org.elasticsearch.xpack.ql.util.DateUtils.UTC_DATE_TIME_FORMATTER;
-import static org.elasticsearch.xpack.ql.util.NumericUtils.asLongUnsigned;
-import static org.elasticsearch.xpack.ql.util.NumericUtils.unsignedLongAsNumber;
-import static org.elasticsearch.xpack.ql.util.SpatialCoordinateTypes.CARTESIAN;
-import static org.elasticsearch.xpack.ql.util.SpatialCoordinateTypes.GEO;
-import static org.elasticsearch.xpack.ql.util.StringUtils.parseIP;
->>>>>>> Stashed changes
-
 public class EsqlQueryResponse extends ActionResponse implements ChunkedToXContentObject, Releasable {
 
     private final AbstractRefCounted counted = AbstractRefCounted.of(this::closeInternal);
-
-    private static final ParseField ID = new ParseField("id");
-    private static final ParseField IS_RUNNING = new ParseField("is_running");
-    private static final InstantiatingObjectParser<EsqlQueryResponse, Void> PARSER;
-    static {
-        InstantiatingObjectParser.Builder<EsqlQueryResponse, Void> parser = InstantiatingObjectParser.builder(
-            "esql/query_response",
-            true,
-            EsqlQueryResponse.class
-        );
-        parser.declareString(optionalConstructorArg(), ID);
-        parser.declareField(
-            optionalConstructorArg(),
-            p -> p.currentToken() == XContentParser.Token.VALUE_NULL ? false : p.booleanValue(),
-            IS_RUNNING,
-            ObjectParser.ValueType.BOOLEAN_OR_NULL
-        );
-        parser.declareObjectArray(constructorArg(), (p, c) -> ColumnInfo.fromXContent(p), new ParseField("columns"));
-        parser.declareField(constructorArg(), (p, c) -> p.list(), new ParseField("values"), ObjectParser.ValueType.OBJECT_ARRAY);
-        PARSER = parser.build();
-    }
 
     private final List<ColumnInfo> columns;
     private final List<Page> pages;
@@ -123,27 +67,6 @@ public class EsqlQueryResponse extends ActionResponse implements ChunkedToXConte
 
     public EsqlQueryResponse(List<ColumnInfo> columns, List<Page> pages, @Nullable Profile profile, boolean columnar, boolean isAsync) {
         this(columns, pages, profile, columnar, null, false, isAsync);
-    }
-
-    // Used for XContent reconstruction
-    @ParserConstructor
-    public EsqlQueryResponse(@Nullable String asyncExecutionId, Boolean isRunning, List<ColumnInfo> columns, List<List<Object>> values) {
-        this(
-            columns,
-            List.of(valuesToPage(columns, values)),
-            null,
-            false,
-            asyncExecutionId,
-            isRunning != null,
-            isAsync(asyncExecutionId, isRunning)
-        );
-    }
-
-    static boolean isAsync(@Nullable String asyncExecutionId, Boolean isRunning) {
-        if (asyncExecutionId != null || isRunning != null) {
-            return true;
-        }
-        return false;
     }
 
     /**
@@ -208,7 +131,6 @@ public class EsqlQueryResponse extends ActionResponse implements ChunkedToXConte
         return columnar;
     }
 
-<<<<<<< Updated upstream
     public Optional<String> asyncExecutionId() {
         return Optional.ofNullable(asyncExecutionId);
     }
@@ -232,72 +154,6 @@ public class EsqlQueryResponse extends ActionResponse implements ChunkedToXConte
             });
         } else {
             return Collections.emptyIterator();
-=======
-    @Override
-    public Iterator<? extends ToXContent> toXContentChunked(ToXContent.Params params) {
-        final BytesRef scratch = new BytesRef();
-        final Iterator<? extends ToXContent> valuesIt;
-
-        if (pages.isEmpty()) {
-            valuesIt = Collections.emptyIterator();
-        } else if (columnar) {
-            valuesIt = Iterators.flatMap(
-                Iterators.forRange(
-                    0,
-                    columns().size(),
-                    column ->
-                        Iterators.concat(
-                            Iterators.single(((builder, p) -> builder.startArray())),
-                            Iterators.flatMap(pages.iterator(), page -> {
-                                ColumnInfo.PositionToXContent toXContent = columns.get(column)
-                                    .positionToXContent(page.getBlock(column), scratch);
-                                return Iterators.forRange(
-                                    0,
-                                    page.getPositionCount(),
-                                    position -> (builder, p) -> toXContent.positionToXContent(builder, p, position)
-                                );
-                            }),
-                            ChunkedToXContentHelper.endArray()
-                        )
-                ),
-                Function.identity()
-            );
-        } else {
-            String format = getFormat(params);
-            if(format != null && XContentType.JSON_OBJECTS.queryParameter().equals(format)) {
-                valuesIt = Iterators.flatMap(pages.iterator(), page -> {
-                    final int columnCount = columns.size();
-                    assert page.getBlockCount() == columnCount : page.getBlockCount() + " != " + columnCount;
-                    return Iterators.forRange(0, page.getPositionCount(), position -> (builder, p) -> {
-                        Map<String, Object> mapObjectValue = new HashMap<>();
-                        for (int c = 0; c < columnCount; c++) {
-                            String columnName = columns.get(c).name();
-                            String dataType = columns.get(c).type();
-                            Object value = valueAt(dataType, page.getBlock(c), position, scratch);
-                            mapObjectValue.put(columnName, value);
-                        }
-                        return builder.map(mapObjectValue);
-                    });
-                });
-            }
-            else {
-                valuesIt = Iterators.flatMap(pages.iterator(), page -> {
-                    final int columnCount = columns.size();
-                    assert page.getBlockCount() == columnCount : page.getBlockCount() + " != " + columnCount;
-                    final ColumnInfo.PositionToXContent[] toXContents = new ColumnInfo.PositionToXContent[columnCount];
-                    for (int column = 0; column < columnCount; column++) {
-                        toXContents[column] = columns.get(column).positionToXContent(page.getBlock(column), scratch);
-                    }
-                    return Iterators.forRange(0, page.getPositionCount(), position -> (builder, p) -> {
-                        builder.startArray();
-                        for (int c = 0; c < columnCount; c++) {
-                            toXContents[c].positionToXContent(builder, p, position);
-                        }
-                        return builder.endArray();
-                    });
-                });
-            }
->>>>>>> Stashed changes
         }
     }
 
@@ -317,28 +173,9 @@ public class EsqlQueryResponse extends ActionResponse implements ChunkedToXConte
         );
     }
 
-    private static String getFormat(ToXContent.Params params) {
-        String format;
-        if(params instanceof RestRequest) {
-            Map<String, String> mapParams = ((RestRequest) params).params();
-            if(mapParams.containsKey(URL_PARAM_FORMAT)) {
-                format = mapParams.get(URL_PARAM_FORMAT);
-            } else {
-                format = null;
-            }
-        } else {
-            format = null;
-        }
-        return format;
-    }
-
     @Override
     public boolean isFragment() {
         return false;
-    }
-
-    public static EsqlQueryResponse fromXContent(XContentParser parser) {
-        return PARSER.apply(parser, null);
     }
 
     @Override
